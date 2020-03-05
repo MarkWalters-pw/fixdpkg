@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+
+# Extracts debian package, runs your custom script on it, then repackages it.
+# Very simple program with a few verifications to make sure everything goes ok.
+# Globals:
+#   EXTRACTDIR
+#   STARTDIR
+# Exported functions:
+#   repackage
+#   extractpkg
+#   throw
+# Required dependencies:
+#   fakeroot
+#   dpkg
+# Optional dependencies:
+#   wget
+
+function extractpkg() {
+# Extracts the debian package 
+# Required Arguments:
+#   $1 = Package name
+# Optional Arguments:
+#   $2 = Extract directory. New package will start with this name.
+# Globals:
+#   EXTRACTDIR
+#   STARTDIR
+  local pkg=$1
+  if [ -z "$2" ] ; then 
+    EXTRACTDIR=${pkg%%.deb}-patched
+  else
+    EXTRACTDIR=$2
+  fi
+  STARTDIR=$(pwd)
+  [ ! -f "${pkg}" ] && { throw "Could not find file: ${pkg}"; }
+  [[ ! ${pkg} =~ \.deb$ ]] && { throw "${pkg} doesn't end with .deb"; }
+  [ -d "${EXTRACTDIR}" ] && { throw "${EXTRACTDIR} already exists."; }
+  [ -z "$(command -v fakeroot)" ] && { throw "Error: Could not find fakeroot\napt -y install fakeroot"; }
+  [ -z "$(command -v dpkg-deb)" ] && { throw "Error: Could not find dpkg-deb\napt -y install dpkg"; }
+  dpkg-deb -R "${pkg}" "${EXTRACTDIR}"
+  cd "${EXTRACTDIR}" || { throw "Folder does not exist"; }
+}
+
+function repackage() {
+# Repackages the debian package 
+# Globals:
+#   EXTRACTDIR
+#   STARTDIR
+  [ -z "${STARTDIR}" ] || [ -z "${EXTRACTDIR}" ] && throw "STARTDIR and NEWDIR should be defined"
+  cd "${STARTDIR}/${EXTRACTDIR}" || throw "Folder does not exist"
+  [ ! -d DEBIAN ] && mkdir DEBIAN
+  md5sum $(find -path ./DEBIAN -prune -o -type f -print)> DEBIAN/md5sums
+  cd "${STARTDIR}" || throw "Folder does not exist"
+  fakeroot dpkg-deb -b "${EXTRACTDIR}"
+  [ ${#EXTRACTDIR} -gt 2 ] && [[ ! "${EXTRACTDIR}" =~ / ]] && rm -rf "${EXTRACTDIR}"
+}
+
+function throw() {
+# Displays error message and exits
+# Default error code is 1
+  local errorcode
+  if [ -z "$2" ] ; then 
+    errorcode=1
+  else
+    errorcode=$2
+  fi
+  echo -e "$1"
+  exit ${errorcode}
+}
+
+function _fixdpkg_main() {
+# Main function. Not called when loaded with source.
+# 
+  local usage
+  local flag
+  local runscript
+  local installit
+  local pkgin
+  local pkgout
+  local tmp="/tmp/redpkg.tmp" # Temp file. If you can think of a better way to do this 
+                              # and still handle ';' and '\n' then let me know
+  usage='
+Usage: '$(basename "$0")' [-s <FILE>] [-c <STRING>] [-o <NEWPKG.deb>] [-p|v|h] <OLDPKG.deb>
+
+Options:
+  -s <FILE>        Execute script. Executed in the extracted package directory
+  -c <STRING>      Execute script from the supplied string
+  -p               Execute script from a piped string
+  -o <NEWPKG.deb>  Save to this file name
+                   By default it will save to OLDPKG-patched.deb
+  -i               Install patched package when done
+  -v               Verbose output using set -x
+
+Examples:
+  '$(basename "$0")' -s patch.sh old.deb
+  '$(basename "$0")' -s patch.sh http://server/old.deb
+  '$(basename "$0")' -s patch.sh -o new.deb old.deb
+  '$(basename "$0")' -vs patch.sh old.deb 
+  '$(basename "$0")' -c "rm badfile;mv baddir/file gooddir" old.deb
+  '$(basename "$0")' -p old.deb <<< "rm badfile"
+  echo -e "rm badfile\\ntouch done"|'$(basename "$0")' -p old.deb'
+
+  while getopts "s:c:o:pvih" flag; do
+    case "${flag}" in
+      s)  runscript=${OPTARG}
+          [ ! -f "${runscript}" ] && throw "File ${runscript} does not exist."
+          ;;
+      c)  runscript=${tmp}
+          echo -e "${OPTARG}" > ${runscript}
+          ;;
+      o)  pkgout=${OPTARG} ;;
+      p)  runscript=${tmp}
+          cat > ${runscript}
+          ;;
+      v)  set -x ;;
+      i)  installit=true ;;
+      h)  throw "${usage}" 0 ;;
+      \?) throw "${usage}" ;;
+    esac
+  done
+  pkgin="${@: -1}" # Just grabbing the last argument.  I'm sure there is a better way.
+  [ -z "${pkgin}" ] && throw "Package not specified\n${usage}"
+  [[ ! ${pkgin} =~ \.deb$ ]] && throw "Package ${pkgin} does not end with .deb\n${usage}"
+  [ -z "${runscript}" ] && throw "Error: Script not provided.\n${usage}"
+  [ ! -x "${runscript}" ] && chmod +x ${runscript}
+
+  [[ "${pkgin}" =~ ^http(|s): ]] && {
+    url="${pkgin}"
+    pkgin="${url##*/}"
+    [ -z "$(command -v wget)" ] && { throw "Error: Could not find wget\napt -y install wget"; }
+    wget -cq "${url}"
+  }
+  if [ -z "${pkgout}" ] ; then 
+    pkgout=${pkgin}-patched.deb
+  else
+    [[ ! ${pkgout} =~ \.deb$ ]] && pkgout="${pkgout}.deb"
+  fi
+
+  [[ "${pkgin}" == "${pkgout}" ]] && throw "Should not save new package to old."
+  echo "Extracting package"
+  extractpkg "${pkgin}" "${pkgout%%.deb}"
+  echo "Running patch"
+  ${runscript}
+  [[ "${runscript}" == "${tmp}" ]] && rm ${tmp} 
+  echo "Repackaging"
+  repackage
+  [ ${installit} ] && sudo dpkg -i "${pkgout}"
+}
+
+# Check if executed normally or with source. If this file is renamed you MUST update it here.
+if [ "$(basename "$0")" == "fixdpkg" ] ; then 
+  # Normal execution
+  _fixdpkg_main "$@"
+else
+  # Sourced execution
+  # Local main function not needed
+  unset -f _fixdpkg_main
+fi

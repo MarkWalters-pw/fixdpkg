@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+# Example of what can be done with this fixdpkg
+# Old versions of libpng12 will not install on new versions of Ubuntu.
+# To fix this you must move the library to the correct directory and add a symbolic link
+
+cat <<EOF | ./fixdpkg -i -p http://mirrors.kernel.org/ubuntu/pool/main/libp/libpng/libpng12-0_1.2.54-1ubuntu1_amd64.deb
+rm -rf usr/share usr/lib/x86_64-linux-gnu/*
+mv lib/x86_64-linux-gnu/libpng12.so.0.54.0 usr/lib/x86_64-linux-gnu
+rm -rf lib
+cd usr/lib/x86_64-linux-gnu
+ln -s libpng12.so.0.54.0 libpng12.so.0
+EOF
