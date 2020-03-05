@@ -127,6 +127,7 @@ Examples:
     url="${pkgin}"
     pkgin="${url##*/}"
     [ -z "$(command -v wget)" ] && { throw "Error: Could not find wget\napt -y install wget"; }
+    echo "Downloading ${pkgin}"
     wget -cq "${url}"
   }
   if [ -z "${pkgout}" ] ; then 
