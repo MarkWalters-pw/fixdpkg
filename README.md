@@ -43,3 +43,36 @@ Unpacking libpng12-0:amd64 (1.2.54-1ubuntu1) ...
 Setting up libpng12-0:amd64 (1.2.54-1ubuntu1) ...
 Processing triggers for libc-bin (2.30-0ubuntu3) ...
 ```
+
+Another way to use it is to call its functions from your script.
+
+```
+. fixdpkg
+
+pkg=libpng12-0_1.2.54-1ubuntu1_amd64.deb
+
+extractpkg "${pkg}"
+
+rm -rf usr/share usr/lib/x86_64-linux-gnu/*
+mv lib/x86_64-linux-gnu/libpng12.so.0.54.0 usr/lib/x86_64-linux-gnu
+rm -rf lib
+cd usr/lib/x86_64-linux-gnu || throw "Invalid directory"
+ln -s libpng12.so.0.54.0 libpng12.so.0
+
+repackage
+
+sudo dpkg -i ${pkg%%.deb}-patched.deb
+```
+
+Which reults in:
+
+```
+$ patch-libpng12-v2
+dpkg-deb: building package 'libpng12-0' in 'libpng12-0_1.2.54-1ubuntu1_amd64-patched.deb'.
+Selecting previously unselected package libpng12-0:amd64.
+(Reading database ... 346483 files and directories currently installed.)
+Preparing to unpack libpng12-0_1.2.54-1ubuntu1_amd64-patched.deb ...
+Unpacking libpng12-0:amd64 (1.2.54-1ubuntu1) ...
+Setting up libpng12-0:amd64 (1.2.54-1ubuntu1) ...
+Processing triggers for libc-bin (2.30-0ubuntu3) ...
+```

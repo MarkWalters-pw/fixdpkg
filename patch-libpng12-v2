@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+# Example of what can be done with this fixdpkg
+# Version 2
+
+# import library
+. fixdpkg
+
+pkg=libpng12-0_1.2.54-1ubuntu1_amd64.deb
+
+extractpkg "${pkg}"
+
+rm -rf usr/share usr/lib/x86_64-linux-gnu/*
+mv lib/x86_64-linux-gnu/libpng12.so.0.54.0 usr/lib/x86_64-linux-gnu
+rm -rf lib
+cd usr/lib/x86_64-linux-gnu || throw "Invalid directory"
+ln -s libpng12.so.0.54.0 libpng12.so.0
+
+repackage
+
+sudo dpkg -i ${pkg%%.deb}-patched.deb
