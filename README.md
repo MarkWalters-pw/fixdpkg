@@ -6,6 +6,16 @@ patch-libpng12 is an example of what you can do with fixdpkg.  It will allow you
 
 This is the error you get when trying to install libpng12 on Ubuntu focal.
 ```
+$ apt -y install libpng12-0
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+Package libpng12-0 is not available, but is referred to by another package.
+This may mean that the package is missing, has been obsoleted, or
+is only available from another source
+
+E: Package 'libpng12-0' has no installation candidate
+$ wget -cq http://mirrors.kernel.org/ubuntu/pool/main/libp/libpng/libpng12-0_1.2.54-1ubuntu1_amd64.deb
 $ dpkg -i libpng12-0_1.2.54-1ubuntu1_amd64.deb 
 Selecting previously unselected package libpng12-0:amd64.
 (Reading database ... 346483 files and directories currently installed.)
@@ -35,7 +45,7 @@ Which results in:
 Downloading libpng12-0_1.2.54-1ubuntu1_amd64.deb
 Extracting package
 Running patch
-Repackaging
+Repackaging 
 dpkg-deb: building package 'libpng12-0' in 'libpng12-0_1.2.54-1ubuntu1_amd64.deb-patched.deb'.
 (Reading database ... 346483 files and directories currently installed.)
 Preparing to unpack libpng12-0_1.2.54-1ubuntu1_amd64.deb-patched.deb ...
@@ -48,8 +58,9 @@ Another way to use it is to call its functions from your script.
 
 ```
 . fixdpkg
-
-pkg=libpng12-0_1.2.54-1ubuntu1_amd64.deb
+url="http://mirrors.kernel.org/ubuntu/pool/main/libp/libpng/libpng12-0_1.2.54-1ubuntu1_amd64.deb"
+pkg="${url##*/}"
+wget -cq "${url}"
 
 extractpkg "${pkg}"
 
